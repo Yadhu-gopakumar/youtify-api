@@ -4,7 +4,7 @@ from ytmusicapi import YTMusic
 
 app = Flask(__name__)
 CORS(app)  
-ytmusic = YTMusic()
+
 
 @app.route('/')
 def home():
@@ -12,6 +12,7 @@ def home():
 # Fetch popular or trending songs
 @app.route('/trending', methods=['GET'])
 def trending():
+    ytmusic = YTMusic()
     region = request.args.get('region', 'IN')  # Default to 'IN' (India)
 
     try:
@@ -34,6 +35,7 @@ def trending():
 # Search for songs, artists, albums, etc.
 @app.route('/search', methods=['GET'])
 def search():
+    ytmusic = YTMusic()
     query = request.args.get('query', '')  # Get the search query from the request
     limit = int(request.args.get('limit', 10))  # Default limit of 10 results
 
