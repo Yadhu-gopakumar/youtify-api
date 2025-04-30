@@ -4,6 +4,9 @@ from ytmusicapi import YTMusic
 app = Flask(__name__)
 ytmusic = YTMusic()
 
+@app.route('/')
+def home():
+    return jsonify({"message": "Youtify music app api-yadhu"})
 # Fetch popular or trending songs
 @app.route('/trending', methods=['GET'])
 def trending():
