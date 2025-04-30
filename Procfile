@@ -1,1 +1,1 @@
-web: python music.py
+web: gunicorn music:app
