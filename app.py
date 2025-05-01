@@ -83,32 +83,65 @@ def trending():
 
 
 # Search for songs, artists, albums, etc.
+# @app.route('/search', methods=['GET'])
+# def search():
+#     ytmusic = YTMusic()
+#     query = request.args.get('query', '')  # Get the search query from the request
+#     limit = int(request.args.get('limit', 10))  # Default limit of 10 results
+
+#     if not query:
+#         return jsonify({"error": "Query parameter is required"}), 400
+
+#     try:
+#         # Perform the search based on the query
+#         search_results = ytmusic.search(query, limit=limit)
+      
+#         # Format the response to return only relevant details like title, videoId, and artists
+#         search_results_formatted = [{
+#             'title': song['title'],
+#             'videoId': song['videoId'],
+#             'artists': [artist['name'] for artist in song['artists']],
+#             'audioUrl': get_audio_url(song['videoId'])
+#         } for song in search_results if 'videoId' in song]
+
+#         return jsonify(search_results_formatted)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
 @app.route('/search', methods=['GET'])
 def search():
     ytmusic = YTMusic()
-    query = request.args.get('query', '')  # Get the search query from the request
-    limit = int(request.args.get('limit', 10))  # Default limit of 10 results
+    query = request.args.get('query', '')
+    limit = int(request.args.get('limit', 10))
 
     if not query:
         return jsonify({"error": "Query parameter is required"}), 400
 
     try:
-        # Perform the search based on the query
         search_results = ytmusic.search(query, limit=limit)
-      
-        # Format the response to return only relevant details like title, videoId, and artists
-        search_results_formatted = [{
-            'title': song['title'],
-            'videoId': song['videoId'],
-            'artists': [artist['name'] for artist in song['artists']],
-            'audioUrl': get_audio_url(song['videoId'])
-        } for song in search_results if 'videoId' in song]
+        search_results_formatted = []
+
+        for song in search_results:
+            video_id = song.get('videoId')
+            if not video_id:
+                continue  # Skip if no videoId
+
+            audio_url = get_audio_url(video_id)
+            if not audio_url:
+                continue  # Skip if yt-dlp fails
+
+            search_results_formatted.append({
+                'title': song['title'],
+                'videoId': video_id,
+                'artists': [artist['name'] for artist in song.get('artists', [])],
+                'audioUrl': audio_url
+            })
 
         return jsonify(search_results_formatted)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
