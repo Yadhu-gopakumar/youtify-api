@@ -29,27 +29,57 @@ def get_audio_url(video_id):
 
 
 # Fetch popular or trending songs
+# @app.route('/trending', methods=['GET'])
+# def trending():
+#     ytmusic = YTMusic()
+#     region = request.args.get('region', 'IN')  # Default to 'IN' (India)
+
+#     try:
+#         # Search for popular songs or playlists (Example search for 'trending')
+#         search_results = ytmusic.search('trending', limit=10)
+        
+#         # Format the response to return only the song title and videoId
+#         trending_results = [{
+#             'title': song['title'],
+#             'videoId': song['videoId'],
+#             'artists': [artist['name'] for artist in song['artists']],
+#             'audioUrl': get_audio_url(song['videoId'])
+#         } for song in search_results if 'videoId' in song]
+
+#         return jsonify(trending_results)
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 @app.route('/trending', methods=['GET'])
 def trending():
     ytmusic = YTMusic()
-    region = request.args.get('region', 'IN')  # Default to 'IN' (India)
+    region = request.args.get('region', 'IN')
 
     try:
-        # Search for popular songs or playlists (Example search for 'trending')
         search_results = ytmusic.search('trending', limit=10)
-        
-        # Format the response to return only the song title and videoId
-        trending_results = [{
-            'title': song['title'],
-            'videoId': song['videoId'],
-            'artists': [artist['name'] for artist in song['artists']],
-            'audioUrl': get_audio_url(song['videoId'])
-        } for song in search_results if 'videoId' in song]
+        trending_results = []
+
+        for song in search_results:
+            video_id = song.get('videoId')
+            if not video_id:
+                continue  # Skip invalid results
+            
+            audio_url = get_audio_url(video_id)
+            if not audio_url:
+                continue  # Skip if yt-dlp fails (e.g. login required)
+
+            trending_results.append({
+                'title': song['title'],
+                'videoId': video_id,
+                'artists': [artist['name'] for artist in song.get('artists', [])],
+                'audioUrl': audio_url
+            })
 
         return jsonify(trending_results)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # Search for songs, artists, albums, etc.
