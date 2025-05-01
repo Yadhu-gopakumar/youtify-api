@@ -37,7 +37,7 @@ def trending():
     try:
         # Search for popular songs or playlists (Example search for 'trending')
         search_results = ytmusic.search('trending', limit=10)
-        audio_url = get_audio_url(video_id)
+        audio_url = get_audio_url(song['videoId'])
         # Format the response to return only the song title and videoId
         trending_results = [{
             'title': song['title'],
@@ -65,7 +65,7 @@ def search():
     try:
         # Perform the search based on the query
         search_results = ytmusic.search(query, limit=limit)
-        audio_url = get_audio_url(video_id)
+        audio_url = get_audio_url(song['videoId'])
         # Format the response to return only relevant details like title, videoId, and artists
         search_results_formatted = [{
             'title': song['title'],
