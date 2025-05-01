@@ -37,13 +37,13 @@ def trending():
     try:
         # Search for popular songs or playlists (Example search for 'trending')
         search_results = ytmusic.search('trending', limit=10)
-        audio_url = get_audio_url(song['videoId'])
+        
         # Format the response to return only the song title and videoId
         trending_results = [{
             'title': song['title'],
             'videoId': song['videoId'],
             'artists': [artist['name'] for artist in song['artists']],
-            'audioUrl': audio_url
+            'audioUrl': get_audio_url(song['videoId'])
         } for song in search_results if 'videoId' in song]
 
         return jsonify(trending_results)
@@ -65,13 +65,13 @@ def search():
     try:
         # Perform the search based on the query
         search_results = ytmusic.search(query, limit=limit)
-        audio_url = get_audio_url(song['videoId'])
+      
         # Format the response to return only relevant details like title, videoId, and artists
         search_results_formatted = [{
             'title': song['title'],
             'videoId': song['videoId'],
             'artists': [artist['name'] for artist in song['artists']],
-            'audioUrl': audio_url
+            'audioUrl': get_audio_url(song['videoId'])
         } for song in search_results if 'videoId' in song]
 
         return jsonify(search_results_formatted)
