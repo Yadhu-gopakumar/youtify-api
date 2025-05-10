@@ -1,147 +1,197 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 from ytmusicapi import YTMusic
-import subprocess
+from pytube import YouTube
+import json
+import requests
+import re
+
+import yt_dlp
 
 app = Flask(__name__)
-CORS(app)  
+yt = YTMusic()
 
 
-@app.route('/')
-def home():
-    return jsonify({"message": "Youtify music app api-yadhu"})
-
-
-def get_audio_url(video_id):
+@app.route('/trending/new', methods=['GET'])
+def get_new_trending():
+    """Get trending new songs in India with robust artist handling"""
     try:
-        cmd = [
-            'yt-dlp',
-            '-f', 'bestaudio',
-            '--get-url',
-            f'https://www.youtube.com/watch?v={video_id}'
-        ]
-        result = subprocess.check_output(cmd, timeout=10).decode('utf-8').strip()
-        return result
-    except Exception as e:
-        print(f"Error fetching audio URL for {video_id}: {e}")
-        return None
-
-
-
-# Fetch popular or trending songs
-# @app.route('/trending', methods=['GET'])
-# def trending():
-#     ytmusic = YTMusic()
-#     region = request.args.get('region', 'IN')  # Default to 'IN' (India)
-
-#     try:
-#         # Search for popular songs or playlists (Example search for 'trending')
-#         search_results = ytmusic.search('trending', limit=10)
+        charts = yt.get_charts(country="IN")
         
-#         # Format the response to return only the song title and videoId
-#         trending_results = [{
-#             'title': song['title'],
-#             'videoId': song['videoId'],
-#             'artists': [artist['name'] for artist in song['artists']],
-#             'audioUrl': get_audio_url(song['videoId'])
-#         } for song in search_results if 'videoId' in song]
-
-#         return jsonify(trending_results)
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-@app.route('/trending', methods=['GET'])
-def trending():
-    ytmusic = YTMusic()
-    region = request.args.get('region', 'IN')
-
-    try:
-        search_results = ytmusic.search('trending', limit=10)
-        trending_results = []
-
-        for song in search_results:
-            video_id = song.get('videoId')
-            if not video_id:
-                continue  # Skip invalid results
+        if 'videos' not in charts or 'items' not in charts['videos']:
+            return jsonify({
+                "error": "No trending data available",
+                "solution": "Try again later or check API updates"
+            }), 404
+        
+        new_songs = []
+        for item in charts['videos']['items'][:20]:
+            if not item.get('videoId'):
+                continue
+                
+            # Improved artist handling
+            artists = []
+            for artist in item.get('artists', []):
+                if isinstance(artist, dict):
+                    name = artist.get('name')
+                    if name and not any(x in name.lower() for x in ['min', 'sec', 'hour']):  # Skip duration strings
+                        artists.append(name)
+                elif isinstance(artist, str):
+                    if not any(x in artist.lower() for x in ['min', 'sec', 'hour']):
+                        artists.append(artist)
             
-            audio_url = get_audio_url(video_id)
-            if not audio_url:
-                continue  # Skip if yt-dlp fails (e.g. login required)
-
-            trending_results.append({
-                'title': song['title'],
-                'videoId': video_id,
-                'artists': [artist['name'] for artist in song.get('artists', [])],
-                'audioUrl': audio_url
+            # Fallback for missing artists
+            if not artists:
+                artists = ["Artist info unavailable"]
+            
+            # Get duration (fallback to empty string)
+            duration = item.get('duration', '0:00')
+            if any(x in duration.lower() for x in ['min', 'sec']):  # Sometimes duration appears in artist field
+                duration = '0:00'
+                
+            new_songs.append({
+                "title": item.get('title', 'Unknown Title'),
+                "artists": artists,
+                "videoId": item['videoId'],
+                "views": item.get('views', 'N/A'),
+                "duration": duration,
+                "thumbnail": item.get('thumbnails', [{}])[0].get('url', '')
             })
-
-        return jsonify(trending_results)
-
+        
+        return jsonify({
+            "country": "India",
+            "count": len(new_songs),
+            "songs": new_songs
+        })
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Failed to fetch trending songs",
+            "details": str(e)
+        }), 500
 
-
-
-# Search for songs, artists, albums, etc.
-# @app.route('/search', methods=['GET'])
-# def search():
-#     ytmusic = YTMusic()
-#     query = request.args.get('query', '')  # Get the search query from the request
-#     limit = int(request.args.get('limit', 10))  # Default limit of 10 results
-
-#     if not query:
-#         return jsonify({"error": "Query parameter is required"}), 400
-
-#     try:
-#         # Perform the search based on the query
-#         search_results = ytmusic.search(query, limit=limit)
-      
-#         # Format the response to return only relevant details like title, videoId, and artists
-#         search_results_formatted = [{
-#             'title': song['title'],
-#             'videoId': song['videoId'],
-#             'artists': [artist['name'] for artist in song['artists']],
-#             'audioUrl': get_audio_url(song['videoId'])
-#         } for song in search_results if 'videoId' in song]
-
-#         return jsonify(search_results_formatted)
-
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
+# Endpoint 2: Search Songs
 @app.route('/search', methods=['GET'])
-def search():
-    ytmusic = YTMusic()
-    query = request.args.get('query', '')
-    limit = int(request.args.get('limit', 10))
-
+def search_songs():
+    query = request.args.get('q')
     if not query:
-        return jsonify({"error": "Query parameter is required"}), 400
+        return jsonify({"error": "Missing search query"}), 400
+    
+    results = yt.search(query, filter="songs")
+    return jsonify({
+        "results": [{
+            "title": song['title'],
+            "artists": [a['name'] for a in song['artists']],
+            "videoId": song['videoId'],
+            "duration": song['duration']
+        } for song in results[:10]]  # Top 10 results
+    })
 
+
+@app.route('/play', methods=['GET'])
+def play_song():
+    video_id = request.args.get('id')
+    if not video_id:
+        return jsonify({"error": "Missing video ID"}), 400
+
+    # Method 1: Try yt-dlp first (most reliable)
     try:
-        search_results = ytmusic.search(query, limit=limit)
-        search_results_formatted = []
-
-        for song in search_results:
-            video_id = song.get('videoId')
-            if not video_id:
-                continue  # Skip if no videoId
-
-            audio_url = get_audio_url(video_id)
-            if not audio_url:
-                continue  # Skip if yt-dlp fails
-
-            search_results_formatted.append({
-                'title': song['title'],
-                'videoId': video_id,
-                'artists': [artist['name'] for artist in song.get('artists', [])],
-                'audioUrl': audio_url
+        with yt_dlp.YoutubeDL({
+            'format': 'bestaudio/best',
+            'quiet': True,
+            'extract_flat': True,
+            'forceurl': True,
+        }) as ydl:
+            info = ydl.extract_info(f'https://youtube.com/watch?v={video_id}', download=False)
+            return jsonify({
+                "stream_url": info['url'],
+                "title": info.get('title', ''),
+                "duration": info.get('duration', 0),
+                "thumbnail": info.get('thumbnail', ''),
+                "method": "yt-dlp"
             })
-
-        return jsonify(search_results_formatted)
-
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"yt-dlp failed: {str(e)}")
+
+    # Method 2: Fallback to player API extraction
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        
+        # First get the base video page
+        response = requests.get(
+            f"https://www.youtube.com/watch?v={video_id}",
+            headers=headers
+        )
+        response.raise_for_status()
+        
+        # Extract player config
+        match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?})\s*;', response.text)
+        if not match:
+            raise ValueError("Couldn't extract player response")
+            
+        player_response = json.loads(match.group(1))
+        
+        # Get streaming data
+        streaming_data = player_response.get('streamingData', {})
+        formats = streaming_data.get('formats', []) + streaming_data.get('adaptiveFormats', [])
+        
+        # Find best audio stream
+        audio_streams = [
+            f for f in formats 
+            if f.get('mimeType', '').startswith('audio/') 
+            and f.get('url')
+        ]
+        
+        if not audio_streams:
+            raise ValueError("No audio streams found")
+            
+        best_stream = max(audio_streams, key=lambda x: int(x.get('bitrate', 0)))
+        
+        return jsonify({
+            "stream_url": best_stream['url'],
+            "title": player_response.get('videoDetails', {}).get('title', ''),
+            "duration": player_response.get('videoDetails', {}).get('lengthSeconds', 0),
+            "thumbnail": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg",
+            "method": "player_api"
+        })
+        
+    except Exception as e:
+        print(f"Player API failed: {str(e)}")
+
+    # Method 3: Final fallback to Invidious API
+    try:
+        invidious_instances = [
+            "https://vid.puffyan.us",
+            "https://invidious.snopyta.org",
+            "https://yt.artemislena.eu"
+        ]
+        
+        for instance in invidious_instances:
+            try:
+                response = requests.get(f"{instance}/api/v1/videos/{video_id}", timeout=5)
+                data = response.json()
+                if 'formatStreams' in data and data['formatStreams']:
+                    return jsonify({
+                        "stream_url": data['formatStreams'][0]['url'],
+                        "title": data.get('title', ''),
+                        "duration": data.get('lengthSeconds', 0),
+                        "thumbnail": data.get('videoThumbnails', [{}])[-1].get('url', ''),
+                        "method": "invidious"
+                    })
+            except:
+                continue
+                
+        raise ValueError("All Invidious instances failed")
+        
+    except Exception as e:
+        print(f"Invidious failed: {str(e)}")
+
+    return jsonify({
+        "error": "All methods failed to fetch stream",
+        "solution": "YouTube's API may have changed. Try again later or use official YouTube API."
+    }), 503
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    app.run(debug=True)
