@@ -11,7 +11,7 @@ app = Flask(__name__)
 yt = YTMusic()
 
 
-@app.route('/trending/new', methods=['GET'])
+@app.route('/trending', methods=['GET'])
 def get_new_trending():
     """Get trending new songs in India with robust artist handling"""
     try:
@@ -192,6 +192,7 @@ def play_song():
         "error": "All methods failed to fetch stream",
         "solution": "YouTube's API may have changed. Try again later or use official YouTube API."
     }), 503
-
+    
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
